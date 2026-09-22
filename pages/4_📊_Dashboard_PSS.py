@@ -30,7 +30,7 @@ st.markdown("""
 <div class="module-header">
     <div class="module-tag">PORTAL MONITORING &middot; 06</div>
     <div class="module-title">Dashboard Pemantauan PSS.</div>
-    <div class="module-desc">Tinjau update progress lapangan harian dan evaluasi target berdasarkan riwayat perjalanan dinas.</div>
+    <div class="module-desc">Tinjau update progress indikator berdasarkan kelompok data dan status target secara real-time.</div>
 </div>
 """, unsafe_allow_html=True)
 st.divider()
@@ -40,66 +40,71 @@ st.divider()
 # ==========================================
 FILE_PROGRESS = "Untitled_2.xlsx"
 
-# Simulasi template jika file belum ada (agar error tidak muncul saat diuji coba pertama kali)
 if not os.path.exists(FILE_PROGRESS):
-    st.warning(f"⚠️ File referensi '{FILE_PROGRESS}' belum ditemukan di sistem. Harap pastikan karyawan telah melakukan submit data awal.")
+    st.warning(f"⚠️ File referensi '{FILE_PROGRESS}' belum ditemukan di folder sistem. Harap upload file tersebut ke GitHub Anda.")
 else:
     try:
-        # Membaca data submission dari karyawan
         df_progress = pd.read_excel(FILE_PROGRESS)
         
         # ==========================================
-        # 3. FITUR FILTER: PERJALANAN DINAS
+        # 3. FITUR FILTER DROPDOWN: KELOMPOK DATA
         # ==========================================
-        st.markdown("### 🔍 Filter Pantauan")
+        st.markdown("### 🔍 Filter Indikator")
         
-        # Asumsi ada kolom bernama 'Perjalanan Dinas' atau mirip dengan itu di dalam Untitled_2.xlsx
-        kolom_dinas = next((col for col in df_progress.columns if 'dinas' in col.lower() or 'perjalanan' in col.lower()), None)
+        # Deteksi kolom Kelompok Data atau Status Target secara otomatis
+        # Jika nama kolomnya berbeda, Anda bisa mengganti teks di dalam tanda kutip bawah ini
+        kolom_kelompok = next((col for col in df_progress.columns if 'kelompok data' in col.lower() or 'status target' in col.lower() or 'target' in col.lower()), df_progress.columns[0])
         
         df_tampil = df_progress
         
-        if kolom_dinas:
-            daftar_dinas = ["Semua Perjalanan Dinas"] + sorted(df_progress[kolom_dinas].dropna().astype(str).unique().tolist())
-            pilihan_dinas = st.selectbox("Tinjau progress berdasarkan Perjalanan Dinas:", options=daftar_dinas)
+        if kolom_kelompok:
+            # Mengambil nilai unik dari kolom tersebut untuk dijadikan opsi Dropdown
+            daftar_kelompok = ["Semua Kelompok Data"] + sorted(df_progress[kolom_kelompok].dropna().astype(str).unique().tolist())
             
-            if pilihan_dinas != "Semua Perjalanan Dinas":
-                df_tampil = df_progress[df_progress[kolom_dinas].astype(str) == pilihan_dinas]
-        else:
-            st.info("ℹ️ Kolom 'Perjalanan Dinas' tidak terdeteksi di dalam file. Menampilkan semua data.")
+            # Membuat Dropdown
+            pilihan_kelompok = st.selectbox(
+                f"Pilih {kolom_kelompok} untuk memfilter nama indikator:", 
+                options=daftar_kelompok
+            )
+            
+            # Melakukan penyaringan (filter) data berdasarkan pilihan Dropdown
+            if pilihan_kelompok != "Semua Kelompok Data":
+                df_tampil = df_progress[df_progress[kolom_kelompok].astype(str) == pilihan_kelompok]
 
         # ==========================================
-        # 4. HIGHLIGHT METRICS (RINGKASAN PROGRESS)
+        # 4. HIGHLIGHT METRICS (RINGKASAN)
         # ==========================================
-        st.markdown("<br>### 📊 Ringkasan Eksekutif", unsafe_allow_html=True)
+        st.markdown("<br>### 📊 Ringkasan Indikator", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("Total Agenda Terpantau", f"{len(df_tampil)} Kegiatan")
+            st.metric("Total Indikator (Tampil)", f"{len(df_tampil)} Baris")
         with col2:
-            # Mencari kolom yang berisi persentase progress (jika ada)
-            kolom_persentase = next((col for col in df_tampil.columns if 'progress' in col.lower() or 'capaian' in col.lower()), None)
-            if kolom_persentase and pd.api.types.is_numeric_dtype(df_tampil[kolom_persentase]):
-                rata_rata = df_tampil[kolom_persentase].mean()
-                st.metric("Rata-rata Progress", f"{rata_rata:.1f}%")
-            else:
-                st.metric("Status Pemantauan", "Aktif")
+            st.metric("Kelompok Aktif", pilihan_kelompok if pilihan_kelompok != "Semua Kelompok Data" else "Semua")
         with col3:
-            st.metric("Update Terakhir", "Real-time dari Lapangan")
+            # Menghitung jumlah entitas unik jika ada kolom nama indikator
+            kolom_indikator = next((col for col in df_tampil.columns if 'indikator' in col.lower()), None)
+            if kolom_indikator:
+                jumlah_unik = df_tampil[kolom_indikator].nunique()
+                st.metric("Total Indikator Unik", f"{jumlah_unik} Jenis")
+            else:
+                st.metric("Status Data", "Tersinkronisasi")
 
         # ==========================================
-        # 5. TABEL UPDATE LAPANGAN & VISUALISASI
+        # 5. TABEL UPDATE & VISUALISASI
         # ==========================================
-        st.markdown("<br>### 📋 Log Update Progress Lapangan", unsafe_allow_html=True)
+        st.markdown("<br>### 📋 Daftar Nama Indikator & Progress", unsafe_allow_html=True)
+        
+        # Menampilkan tabel yang sudah tersaring
         st.dataframe(df_tampil, use_container_width=True)
         
-        # Opsional: Jika ada kolom numerik, kita bisa tampilkan grafik batang sederhana
-        if kolom_persentase and pd.api.types.is_numeric_dtype(df_tampil[kolom_persentase]):
-            st.markdown("<br>### 📈 Visualisasi Capaian", unsafe_allow_html=True)
-            kolom_label = df_tampil.columns[0] # Ambil kolom pertama sebagai label (misal: Nama Instansi)
-            
-            # Membuat grafik bar chart menggunakan Plotly Express
-            fig = px.bar(df_tampil, x=kolom_label, y=kolom_persentase, 
-                         title="Grafik Capaian Progress per Entitas",
+        # Opsional: Jika Anda ingin menambahkan grafik, ia akan menyesuaikan dengan filter
+        kolom_numerik = df_tampil.select_dtypes(include='number').columns.tolist()
+        if kolom_indikator and kolom_numerik:
+            st.markdown("<br>### 📈 Visualisasi Data", unsafe_allow_html=True)
+            # Menggunakan kolom numerik pertama yang tersedia untuk sumbu Y
+            fig = px.bar(df_tampil, x=kolom_indikator, y=kolom_numerik[0], 
+                         title=f"Grafik Berdasarkan {pilihan_kelompok}",
                          template="plotly_dark", color_discrete_sequence=['#3b82f6'])
             st.plotly_chart(fig, use_container_width=True)
             
@@ -113,6 +118,6 @@ st.markdown("<br><br><br>---", unsafe_allow_html=True)
 st.markdown("""
 <div style="text-align: center; color: #86868b; font-size: 0.9rem; font-weight: 300;">
     <strong>🌐 PORTAL MONITORING TERPADU</strong><br>
-    Sistem ini memantau perubahan data secara langsung dari titik input operasional.
+    Data difilter secara dinamis berdasarkan Kelompok Data dan Target Status.
 </div>
 """, unsafe_allow_html=True)
